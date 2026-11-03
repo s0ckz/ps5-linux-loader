@@ -1,0 +1,61 @@
+name: Build and verify 12.40 Pro GPU firmware support
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      BASE_COMMIT: 2f7033f4185d3062a504e83ac75f6b4e2570dafb
+      LLVM_CONFIG: /usr/bin/llvm-config-18
+      SDK_SHA256: 5fac64093d0e3e69f2584ce7935f24f703f622d9681f1495c85b9f00d1291a2c
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Install build tools on the disposable runner
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends clang-18 lld-18 llvm-18-dev build-essential unzip xxd
+      - name: Fetch the pinned public SDK
+        run: |
+          curl --fail --location --retry 3 https://github.com/ps5-payload-dev/sdk/releases/download/v0.45/ps5-payload-sdk.zip -o "$RUNNER_TEMP/sdk.zip"
+          echo "$SDK_SHA256  $RUNNER_TEMP/sdk.zip" | sha256sum --check
+          unzip -q "$RUNNER_TEMP/sdk.zip" -d "$RUNNER_TEMP"
+          echo "PS5_PAYLOAD_SDK=$RUNNER_TEMP/ps5-payload-sdk" >> "$GITHUB_ENV"
+      - name: Exercise firmware and model selection
+        run: python3 tests/test_gpu_fw_1240.py --baseline "$BASE_COMMIT"
+      - name: Build the upstream baseline and the fork
+        run: |
+          mkdir -p "$RUNNER_TEMP/baseline" bin
+          git archive "$BASE_COMMIT" | tar -x -C "$RUNNER_TEMP/baseline"
+          make -C "$RUNNER_TEMP/baseline" -j1 2>&1 | tee "$RUNNER_TEMP/baseline-build.log"
+          make -j1 2>&1 | tee "$RUNNER_TEMP/patched-build.log"
+      - name: Verify compiled offsets and unchanged shellcode
+        run: |
+          python3 tools/verify_gpu_fw_1240_build.py "$RUNNER_TEMP/baseline" "$GITHUB_WORKSPACE" --output bin/verification-1240-pro.json
+          cp bin/ps5-linux-loader.elf bin/ps5-linux-loader-sonic-1240-pro-gpu.elf
+          sha256sum bin/ps5-linux-loader-sonic-1240-pro-gpu.elf > bin/SHA256SUMS
+          git rev-parse HEAD > bin/SOURCE_COMMIT
+          clang-18 --version > bin/COMPILER_VERSION
+          cp docs/PS5_PRO_1240_GPU_FIRMWARE.md bin/READ_BEFORE_BOOT.md
+      - name: Upload the experimental loader and verification
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ps5-linux-loader-1240-pro-gpu-${{ github.sha }}
+          path: |
+            bin/ps5-linux-loader-sonic-1240-pro-gpu.elf
+            bin/verification-1240-pro.json
+            bin/SHA256SUMS
+            bin/SOURCE_COMMIT
+            bin/COMPILER_VERSION
+            bin/READ_BEFORE_BOOT.md
+          if-no-files-found: error
+          retention-days: 30

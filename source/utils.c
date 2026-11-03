@@ -251,6 +251,8 @@ int set_offsets(void) {
       return -1;
     }
     env_offset = off_1240;
+    // The shared table's GPU firmware offset is verified only on 12.40 Pro.
+    env_offset.PS5_PRO_GPU_FW_OFFSET = 0;
     break;
   case 0x1240:
     if (kernel_get_fw_version() != 0x12400009U) {
@@ -258,6 +260,8 @@ int set_offsets(void) {
       return -1;
     }
     env_offset = off_1240;
+    if (sceKernelGetMainSocId() != 0x840fd0)
+      env_offset.PS5_PRO_GPU_FW_OFFSET = 0;
     break;
   case 0x1260:
     if (kernel_get_fw_version() != 0x12600006U) {
