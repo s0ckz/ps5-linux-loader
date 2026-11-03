@@ -42,7 +42,7 @@ jobs:
         run: |
           python3 tools/verify_gpu_fw_1240_build.py "$RUNNER_TEMP/baseline" "$GITHUB_WORKSPACE" --output bin/verification-1240-pro.json
           cp bin/ps5-linux-loader.elf bin/ps5-linux-loader-sonic-1240-pro-gpu.elf
-          sha256sum bin/ps5-linux-loader-sonic-1240-pro-gpu.elf > bin/SHA256SUMS
+          (cd bin && sha256sum ps5-linux-loader-sonic-1240-pro-gpu.elf) > bin/SHA256SUMS
           git rev-parse HEAD > bin/SOURCE_COMMIT
           clang-18 --version > bin/COMPILER_VERSION
           cp docs/PS5_PRO_1240_GPU_FIRMWARE.md bin/READ_BEFORE_BOOT.md
